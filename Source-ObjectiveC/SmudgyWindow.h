@@ -8,12 +8,9 @@
 
 #import <UIKit/UIKit.h>
 
-/**
- * Category on UIWindow that adds a property allowing one to
- * enable/disable SmudgeKit at will
- */
 @interface UIWindow (SmudgeKitProperties)
 @property (nonatomic, getter=isSmudgeKitEnabled) BOOL enableSmudgeKit;
+@property (nonatomic, strong) UIColor *smudgeColor;
 @end
 
 /**

@@ -13,18 +13,28 @@
 #pragma mark - UIWindow category
 
 static const void *EnableSmudgeKitKey = &EnableSmudgeKitKey;
+static const void *SmudgeColorKey = &SmudgeColorKey;
 
 @implementation UIWindow (SmudgeKitProperties)
-
 - (void)setEnableSmudgeKit:(BOOL)enableSmudgeKit
 {
     objc_setAssociatedObject(self, EnableSmudgeKitKey, [NSNumber numberWithBool:enableSmudgeKit], OBJC_ASSOCIATION_COPY_NONATOMIC);
 }
 
+- (void)setSmudgeColor:(UIColor *)smudgeColor
+{
+    objc_setAssociatedObject(self, SmudgeColorKey, smudgeColor, OBJC_ASSOCIATION_COPY_NONATOMIC);
+}
+
+- (UIColor *)smudgeColor
+{
+    return objc_getAssociatedObject(self, SmudgeColorKey);
+}
+
 - (BOOL)isSmudgeKitEnabled
 {
-    NSNumber *smudgeKitEnabled = objc_getAssociatedObject(self, EnableSmudgeKitKey);
-    return [smudgeKitEnabled boolValue];
+    NSNumber *value = objc_getAssociatedObject(self, EnableSmudgeKitKey);
+    return [value boolValue];
 }
 
 @end
@@ -32,6 +42,8 @@ static const void *EnableSmudgeKitKey = &EnableSmudgeKitKey;
 #pragma mark - Private SmudgeLayer implementation -
 
 @interface SmudgeLayer : CAShapeLayer
+
+@property (nonatomic, strong) UIColor *smudgeColor;
 
 ///Called when the related event changes. Override to update internal state. Position is set automatically by the superlayer.
 - (void)appear;
@@ -56,12 +68,16 @@ static const void *EnableSmudgeKitKey = &EnableSmudgeKitKey;
 - (instancetype)init
 {
     if (self = [super init]) {
+        self.smudgeColor = [UIColor colorWithWhite:0.9 alpha:0.9];
+        
         self.velocity = CGPointZero;
         self.contentsScale = [UIScreen mainScreen].scale;
 
+#pragma mark - FINDME
+        
         CGFloat radius = 20.0;
         self.path = CGPathCreateWithEllipseInRect(CGRectMake(-radius, -radius, radius*2, radius*2), NULL);
-        self.fillColor = [UIColor colorWithWhite:0.9 alpha:0.9].CGColor;
+        self.fillColor = self.smudgeColor.CGColor;
         self.strokeColor = [UIColor colorWithWhite:0.0 alpha:0.35].CGColor;
         self.lineWidth = 1;
 
@@ -72,6 +88,12 @@ static const void *EnableSmudgeKitKey = &EnableSmudgeKitKey;
         self.shadowOffset = CGSizeMake(0.0, 1.0);
     }
     return self;
+}
+
+- (void)setSmudgeColor:(UIColor *)smudgeColor
+{
+    _smudgeColor = smudgeColor;
+    self.fillColor = _smudgeColor.CGColor;
 }
 
 - (void)updateWithTouch:(UITouch *)touch
@@ -129,11 +151,13 @@ static const void *EnableSmudgeKitKey = &EnableSmudgeKitKey;
 @interface SmudgeContainerLayer : CALayer
 
 - (void)updateWithEvent:(UIEvent *)event;
+- (void)clearAllTouches;
 
 @end
 
 @interface SmudgeContainerLayer ()
 
+@property (nonatomic, strong) UIColor *smudgeColor;
 @property (readonly,nonatomic) NSMutableDictionary *touchSmudgeTable;
 
 @end
@@ -144,6 +168,7 @@ static const void *EnableSmudgeKitKey = &EnableSmudgeKitKey;
 {
     if (self = [super init]) {
         _touchSmudgeTable = @{}.mutableCopy;
+        _smudgeColor = [UIColor colorWithWhite:0.9 alpha:0.9];
     }
     return self;
 }
@@ -153,12 +178,14 @@ static const void *EnableSmudgeKitKey = &EnableSmudgeKitKey;
     for (UITouch *touch in event.allTouches) {
         NSValue* touchKey = [NSValue valueWithNonretainedObject:touch];
         SmudgeLayer* smudgeLayer = self.touchSmudgeTable[touchKey];
+        smudgeLayer.smudgeColor = self.smudgeColor;
 
         [CATransaction begin];
         [CATransaction setDisableActions:YES];
 
         if (!smudgeLayer) {
             smudgeLayer = [SmudgeLayer layer];
+            smudgeLayer.smudgeColor = self.smudgeColor;
             self.touchSmudgeTable[touchKey] = smudgeLayer;
             [self addSublayer:smudgeLayer];
         }
@@ -181,6 +208,15 @@ static const void *EnableSmudgeKitKey = &EnableSmudgeKitKey;
                 break;
         }
 
+    }
+}
+
+- (void)clearAllTouches
+{
+    for (NSValue *touchKey in self.touchSmudgeTable)  {
+        SmudgeLayer *smudgeLayer = self.touchSmudgeTable[touchKey];
+        [smudgeLayer disappear];
+        [self.touchSmudgeTable removeObjectForKey:touchKey];
     }
 }
 
@@ -211,6 +247,8 @@ static const void *EnableSmudgeKitKey = &EnableSmudgeKitKey;
     [super sendEvent:event];
     if (self.enableSmudgeKit)  {
         [self renderTouchesForEvent:event];
+    } else {
+        [self.smudgeContainer clearAllTouches];
     }
 }
 
@@ -218,6 +256,7 @@ static const void *EnableSmudgeKitKey = &EnableSmudgeKitKey;
 {
     if (!self.smudgeContainer) {
         _smudgeContainer = [SmudgeContainerLayer layer];
+        _smudgeContainer.smudgeColor = self.smudgeColor;
         [self.layer addSublayer:self.smudgeContainer];
     } else if ([self.layer.sublayers lastObject] != self.smudgeContainer) {
 	    [self.smudgeContainer removeFromSuperlayer];
@@ -227,5 +266,3 @@ static const void *EnableSmudgeKitKey = &EnableSmudgeKitKey;
 }
 
 @end
-
-
